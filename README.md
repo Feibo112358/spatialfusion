@@ -1,5 +1,9 @@
 # SpatialFusion
 
+[![Docs](https://img.shields.io/badge/docs-online-blue.svg)](
+https://josephineyates.github.io/spatialfusion/
+)
+
 **SpatialFusion** is a Python package for deep learning–based analysis of spatial omics data.
 It provides a lightweight framework that integrates **spatial transcriptomics (ST)** with **H&E histopathology** to learn **joint multimodal embeddings** of cellular neighborhoods and group them into **spatial niches**.
 
@@ -12,9 +16,7 @@ By combining molecular and morphological features, SpatialFusion captures coordi
 
 The method is described in the paper: **XXX** (citation forthcoming).
 
-You can find detailed documentation at [![Docs](https://img.shields.io/badge/docs-online-blue.svg)](
-https://<username>.github.io/spatialfusion/
-)
+You can find detailed documentation at https://josephineyates.github.io/spatialfusion/
 
 ---
 
