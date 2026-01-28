@@ -1,7 +1,7 @@
 # SpatialFusion
 
 [![Docs](https://img.shields.io/badge/docs-online-blue.svg)](
-https://josephineyates.github.io/spatialfusion/
+https://uhlerlab.github.io/spatialfusion/
 )
 
 **SpatialFusion** is a Python package for deep learning–based analysis of spatial omics data.
@@ -16,7 +16,7 @@ By combining molecular and morphological features, SpatialFusion captures coordi
 
 The method is described in the paper: **XXX** (citation forthcoming).
 
-You can find detailed documentation at https://josephineyates.github.io/spatialfusion/
+You can find detailed documentation at https://uhlerlab.github.io/spatialfusion/
 
 ---
 
