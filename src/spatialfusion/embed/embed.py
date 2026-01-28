@@ -1,3 +1,14 @@
+"""Autoencoder (AE) and Graph Convolutional Network (GCN) embedding pipeline
+for SpatialFusion.
+
+This module provides utilities for:
+- Running a paired autoencoder on UNI / scGPT embeddings
+- Combining embeddings across modalities
+- Constructing spatial graphs
+- Running a GCN to produce final embeddings
+- Orchestrating the full end-to-end embedding workflow
+"""
+
 from __future__ import annotations
 
 import os
@@ -27,6 +38,20 @@ from spatialfusion.utils.gcn_utils import build_knn_graph
 
 
 def _combine_embeddings(z1: pd.DataFrame, z2: pd.DataFrame, mode: Literal["average", "concat", "z1", "z2"]) -> pd.DataFrame:
+    """
+    Combine two embedding matrices according to a specified mode.
+
+    Args:
+        z1: First embedding DataFrame (cells × features).
+        z2: Second embedding DataFrame (cells × features).
+        mode: Combination strategy.
+
+    Returns:
+        Combined embedding DataFrame.
+
+    Raises:
+        ValueError: If the mode is invalid or embeddings are incompatible.
+    """
     mode = mode.lower()
     if mode not in {"average", "concat", "z1", "z2"}:
         raise ValueError(
@@ -59,6 +84,15 @@ def _combine_embeddings(z1: pd.DataFrame, z2: pd.DataFrame, mode: Literal["avera
 
 
 def _read_tabular_one_row(path: Union[str, Path]) -> pd.DataFrame:
+    """
+    Read a single-row tabular embedding file.
+
+    Args:
+        path: Path to a CSV or Parquet file.
+
+    Returns:
+        DataFrame containing the first row.
+    """
     p = str(path)
     if p.endswith(".csv"):
         return pd.read_csv(p, index_col=0, nrows=1)
@@ -66,6 +100,16 @@ def _read_tabular_one_row(path: Union[str, Path]) -> pd.DataFrame:
 
 
 def infer_input_dims_from_files(uni_path: Union[str, Path], scgpt_path: Union[str, Path]) -> Tuple[int, int]:
+    """
+    Infer embedding dimensions from UNI and scGPT files.
+
+    Args:
+        uni_path: Path to UNI embedding file.
+        scgpt_path: Path to scGPT embedding file.
+
+    Returns:
+        Tuple of (UNI dimension, scGPT dimension).
+    """
     uni = _read_tabular_one_row(uni_path)
     scgpt = _read_tabular_one_row(scgpt_path)
     return uni.shape[1], scgpt.shape[1]
@@ -74,6 +118,21 @@ def infer_input_dims_from_files(uni_path: Union[str, Path], scgpt_path: Union[st
 def infer_input_dims(sample_list: Iterable[str], base_path: Union[str, Path],
                      uni_path: Optional[Union[str, Path]] = None,
                      scgpt_path: Optional[Union[str, Path]] = None) -> Tuple[int, int]:
+    """
+    Infer AE input dimensions from disk.
+
+    Args:
+        sample_list: Iterable of sample identifiers.
+        base_path: Base directory containing sample subfolders.
+        uni_path: Optional explicit UNI file path.
+        scgpt_path: Optional explicit scGPT file path.
+
+    Returns:
+        Tuple of (UNI dimension, scGPT dimension).
+
+    Raises:
+        ValueError: If no valid embeddings are found.
+    """
     if uni_path and scgpt_path:
         return infer_input_dims_from_files(uni_path, scgpt_path)
 
@@ -100,6 +159,14 @@ def infer_input_dims(sample_list: Iterable[str], base_path: Union[str, Path],
 
 @dataclass
 class AEInputs:
+    """
+    Container for in-memory autoencoder inputs.
+
+    Attributes:
+        adata: AnnData object containing spatial metadata.
+        z_uni: UNI embeddings indexed by cell.
+        z_scgpt: Optional scGPT embeddings indexed by cell.
+    """
     adata: sc.AnnData
     z_uni: pd.DataFrame
     z_scgpt: Optional[pd.DataFrame] = None   # ← allow None
@@ -107,6 +174,19 @@ class AEInputs:
 
 def load_paired_ae(ae_ckpt: Union[str, Path], d1_dim: int, d2_dim: int,
                    latent_dim: int = 64, device: str = "cuda:0") -> PairedAE:
+    """
+    Load a pretrained PairedAE model from disk.
+
+    Args:
+        ae_ckpt: Path to the AE checkpoint.
+        d1_dim: Input dimension of modality 1.
+        d2_dim: Input dimension of modality 2.
+        latent_dim: Latent dimension size.
+        device: Torch device string.
+
+    Returns:
+        Loaded PairedAE model in evaluation mode.
+    """
     model = PairedAE(d1_dim, d2_dim, latent_dim=latent_dim)
     state = torch.load(ae_ckpt, map_location=device)
     model.load_state_dict(state)
@@ -155,9 +235,31 @@ def ae_from_arrays(
     combine_mode: Literal["average", "concat", "z1", "z2"] = "average",
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Run PairedAE on already-loaded adata + UNI/scGPT embeddings.
-    Standardizes inputs to match training preprocessing.
-    Returns: (z1_df, z2_df, z_joint_df) aligned to inputs.adata.obs_names.
+    Run a pretrained PairedAE on in-memory UNI and scGPT embeddings.
+
+    This function standardizes the input embeddings using the same preprocessing
+    applied during training, runs the paired autoencoder, and combines the
+    resulting latent representations according to `combine_mode`.
+
+    Args:
+        model: Pretrained PairedAE model.
+        inputs: In-memory inputs containing AnnData and modality embeddings.
+        device: Torch device used for inference.
+        combine_mode: Strategy for combining modality embeddings.
+            One of {"average", "concat", "z1", "z2"}.
+
+    Returns:
+        A tuple `(z1_df, z2_df, z_joint_df)` where:
+            - z1_df: Latent embeddings for UNI modality (cells × latent_dim).
+            - z2_df: Latent embeddings for scGPT modality (cells × latent_dim),
+              or empty if not produced.
+            - z_joint_df: Combined latent embedding according to `combine_mode`.
+
+        All DataFrames are indexed by cell IDs aligned to `inputs.adata.obs_names`.
+
+    Raises:
+        ValueError: If required embeddings are missing or no overlapping cells
+            are found between AnnData and embeddings.
     """
     # determine which inputs are required based on combine_mode
     needs_z1 = True
@@ -219,7 +321,26 @@ def ae_from_disk_for_samples(
     save_dir: Optional[Union[str, Path]] = None,
 ):
     """
-    The original disk-based AE extraction, but returns the DataFrames and (optionally) saves.
+    Run the paired autoencoder using disk-based inputs for multiple samples.
+
+    This function loads UNI and scGPT embeddings from disk for each sample,
+    runs the PairedAE model, combines modality embeddings, and optionally
+    saves the outputs to disk.
+
+    Args:
+        model: Pretrained PairedAE model.
+        sample_list: Iterable of sample identifiers.
+        base_path: Base directory containing sample subfolders.
+        device: Torch device used for inference.
+        combine_mode: Strategy for combining modality embeddings.
+            One of {"average", "concat", "z1", "z2"}.
+        save_dir: Optional directory in which to save AE outputs.
+
+    Returns:
+        A tuple `(z1_df, z2_df, z_joint_df)` containing:
+            - z1_df: UNI latent embeddings.
+            - z2_df: scGPT latent embeddings.
+            - z_joint_df: Combined latent embeddings.
     """
     z1, z2, z_joint_unused, celltypes, samples = extract_embeddings_for_all_samples(
         model, sample_list, base_path, device
@@ -244,13 +365,31 @@ def ae_from_disk_for_samples(
 
 @dataclass
 class GCNInputs:
-    """Inputs for GCN step when you already have the AE joint embedding."""
+    """
+    Container for inputs to the GCN stage.
+
+    Attributes:
+        z_joint: Joint AE embedding indexed by cell ID.
+        adata_by_sample: Mapping from sample ID to AnnData objects,
+            each containing spatial coordinates and metadata.
+    """
     z_joint: pd.DataFrame                        # indexed by cell, columns = features
     # each AnnData contains obs_names that intersect z_joint.index
     adata_by_sample: Dict[str, sc.AnnData]
 
 
 def load_gcn(gcn_ckpt: Union[str, Path], in_dim: int, device: str = "cuda:0") -> GCNAutoencoder:
+    """
+    Load a pretrained GCN autoencoder from disk.
+
+    Args:
+        gcn_ckpt: Path to the GCN checkpoint file.
+        in_dim: Input feature dimensionality.
+        device: Torch device on which to load the model.
+
+    Returns:
+        A GCNAutoencoder instance in evaluation mode.
+    """
     model = GCNAutoencoder(
         in_dim=in_dim, hidden_dim=10, out_dim=in_dim,
         node_mask_ratio=0.9, num_layers=2, n_classes=0
@@ -268,6 +407,26 @@ def graphs_from_embeddings_and_adata(
     spatial_key: str = "spatial",
     k: int = 30,
 ) -> Tuple[List["dgl.DGLGraph"], List[str]]:
+    """
+    Construct spatial KNN graphs from joint embeddings and AnnData objects.
+
+    For each sample, this function:
+    - Aligns cells between `z_joint` and AnnData
+    - Standardizes joint embeddings
+    - Builds a k-nearest-neighbor graph using spatial coordinates
+    - Attaches node features to the graph
+
+    Args:
+        z_joint: Joint AE embeddings indexed by cell ID.
+        adata_by_sample: Mapping from sample ID to AnnData.
+        spatial_key: Key in `adata.obsm` containing spatial coordinates.
+        k: Number of nearest neighbors for graph construction.
+
+    Returns:
+        A tuple `(graphs, keep_samples)` where:
+            - graphs: List of DGL graphs, one per retained sample.
+            - keep_samples: List of sample IDs corresponding to the graphs.
+    """
     import dgl  # lazy import to keep this modular
 
     graphs: List[dgl.DGLGraph] = []
@@ -306,7 +465,24 @@ def gcn_embeddings_from_joint(
     k: int = 30,
 ) -> pd.DataFrame:
     """
-    Build graphs from (adata, z_joint) and run the GCN to produce embeddings with metadata.
+    Generate GCN embeddings from joint AE embeddings and spatial graphs.
+
+    This function constructs spatial graphs for each sample and applies
+    a pretrained GCN model to produce final embeddings with associated
+    metadata.
+
+    Args:
+        gcn_model: Pretrained GCN autoencoder.
+        z_joint: Joint AE embedding indexed by cell ID.
+        adata_by_sample: Mapping from sample ID to AnnData.
+        base_path: Base path used for metadata resolution.
+        device: Torch device used for inference.
+        spatial_key: Key in AnnData.obsm containing spatial coordinates.
+        celltype_key: Key in AnnData.obs containing cell type annotations.
+        k: Number of neighbors for KNN graph construction.
+
+    Returns:
+        DataFrame containing GCN embeddings and associated metadata.
     """
     full_graphs, ordered_samples = graphs_from_embeddings_and_adata(
         z_joint, adata_by_sample, spatial_key=spatial_key, k=k
@@ -353,13 +529,38 @@ def run_full_embedding(
     save_ae_dir: Optional[Union[str, Path]] = None,
 ) -> pd.DataFrame:
     """
-    Flexible end-to-end:
-      - If `ae_inputs_by_sample` is provided, compute AE embeddings in-memory per sample,
-        then run GCN on the combined joint embedding.
-      - Else, use `sample_list` + `base_path` to load from disk like the original pipeline.
+    Run the full SpatialFusion embedding pipeline.
+
+    This function supports two execution modes:
+    1. In-memory mode using `ae_inputs_by_sample`
+    2. Disk-based mode using `sample_list` and `base_path`
+
+    In both cases, it:
+    - Runs the paired autoencoder (AE)
+    - Combines modality embeddings
+    - Constructs spatial graphs
+    - Runs the GCN to produce final embeddings
+
+    Args:
+        ae_inputs_by_sample: Optional in-memory AE inputs per sample.
+        sample_list: Sample identifiers for disk-based execution.
+        base_path: Base directory containing sample data.
+        ae_model_path: Path to AE checkpoint (if AE model not provided).
+        gcn_model_path: Path to GCN checkpoint (if GCN model not provided).
+        ae_model: Optional preloaded AE model.
+        gcn_model: Optional preloaded GCN model.
+        latent_dim: Latent dimensionality of the AE.
+        device: Torch device used for inference.
+        spatial_key: Key in AnnData.obsm for spatial coordinates.
+        k: Number of neighbors for spatial graph construction.
+        celltype_key: Key in AnnData.obs for cell type labels.
+        combine_mode: Strategy for combining modality embeddings.
+        uni_path: Optional UNI file path for dimension inference.
+        scgpt_path: Optional scGPT file path for dimension inference.
+        save_ae_dir: Optional directory to save AE outputs.
 
     Returns:
-        emb_df (pd.DataFrame): final GCN embeddings + metadata
+        DataFrame containing final GCN embeddings with metadata.
     """
     # --- AE stage ---
     if ae_inputs_by_sample is not None:

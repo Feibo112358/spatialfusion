@@ -174,7 +174,7 @@ This produces a DataFrame containing the final integrated embedding for all cell
 
 ## Required Inputs
 
-SpatialFusion operates on a **single-cell AnnData object** paired with an **H&E whole-slide image**.
+SpatialFusion operates on a **single-cell AnnData object** paired with an **H&E whole-slide image**. It also accepts only a WSI with cell coordinates in the H&E only mode.
 
 ### **AnnData fields**
 

@@ -13,17 +13,23 @@ from sklearn.neighbors import NearestNeighbors
 
 class GCNAutoencoder(nn.Module):
     """
-    GCN-based Autoencoder with optional classification head and masked node input.
+    Graph Convolutional Network (GCN) autoencoder with optional classification head.
+
+    The model performs masked node feature reconstruction using stacked GCN layers.
+    During training, a fraction of node features is replaced by a learnable mask
+    token and corrupted with noise. The latent node embeddings can optionally be
+    passed through a classification head.
 
     Args:
         in_dim (int): Input feature dimension.
-        hidden_dim (int): Hidden layer size.
-        out_dim (int): Output feature dimension (reconstruction).
+        hidden_dim (int): Hidden layer dimensionality.
+        out_dim (int): Output feature dimension for reconstruction.
         node_mask_ratio (float): Fraction of nodes to mask during training.
-        num_layers (int): Number of GCN layers.
-        dropout (float): Dropout probability.
-        noise_std (float): Standard deviation of Gaussian noise added to inputs.
-        n_classes (int): Number of classes (if > 0, enables classification).
+        num_layers (int): Number of GCN layers in the encoder.
+        dropout (float): Dropout probability applied during training.
+        noise_std (float): Standard deviation of Gaussian noise added to masked inputs.
+        n_classes (int): Number of classes for node classification.
+            If 0, no classification head is used.
     """
     def __init__(self,
                  in_dim: int,
@@ -35,17 +41,18 @@ class GCNAutoencoder(nn.Module):
                  noise_std: float = 0.1,
                  n_classes: int = 0):
         """
-        Initializes the GCNAutoencoder.
+        Initialize the GCN autoencoder.
 
         Args:
-            in_dim (int): Input feature dimension.
-            hidden_dim (int): Hidden layer size.
-            out_dim (int): Output feature dimension (reconstruction).
-            node_mask_ratio (float): Fraction of nodes to mask during training.
-            num_layers (int): Number of GCN layers.
-            dropout (float): Dropout probability.
-            noise_std (float): Standard deviation of Gaussian noise added to inputs.
-            n_classes (int): Number of classes (if > 0, enables classification).
+            in_dim: Input node feature dimension.
+            hidden_dim: Hidden layer size for GCN encoder.
+            out_dim: Output feature dimension for reconstruction.
+            node_mask_ratio: Fraction of nodes to mask during training.
+            num_layers: Number of GCN layers.
+            dropout: Dropout probability.
+            noise_std: Standard deviation of Gaussian noise applied to inputs.
+            n_classes: Number of output classes for classification.
+                If greater than zero, a classification head is created.
         """
         super().__init__()
         self.node_mask_ratio = node_mask_ratio
@@ -80,14 +87,14 @@ class GCNAutoencoder(nn.Module):
 
     def encode(self, g: dgl.DGLGraph, feat: torch.Tensor) -> torch.Tensor:
         """
-        Encodes node features through GCN layers.
+        Encode node features using stacked GCN layers.
 
         Args:
-            g (dgl.DGLGraph): Input graph.
-            feat (torch.Tensor): Input node features.
+            g: Input DGL graph.
+            feat: Input node feature tensor of shape (num_nodes, in_dim).
 
         Returns:
-            torch.Tensor: Encoded node representations.
+            Tensor of shape (num_nodes, hidden_dim) containing latent node embeddings.
         """
         h = feat
         for i, (gcn, norm) in enumerate(zip(self.gcn_layers, self.norm_layers)):
@@ -100,13 +107,26 @@ class GCNAutoencoder(nn.Module):
 
     def forward(self, g: dgl.DGLGraph):
         """
-        Forward pass: masked node encoding, decoding, optional classification.
+        Forward pass of the GCN autoencoder.
+
+        The forward pass performs:
+        1. Random node masking
+        2. Noise injection and dropout
+        3. GCN encoding
+        4. Feature reconstruction
+        5. Optional node classification
 
         Args:
-            g (dgl.DGLGraph): Input graph with node features in `g.ndata["feat"]`.
+            g: Input DGL graph with node features stored in `g.ndata["feat"]`.
 
         Returns:
-            Tuple: (x_recon, x_original, node_mask, latent_representation, logits or None)
+            A tuple `(x_recon, x_original, node_mask, z, logits)` where:
+                - x_recon: Reconstructed node features.
+                - x_original: Original input node features.
+                - node_mask: Boolean mask indicating masked nodes.
+                - z: Latent node embeddings.
+                - logits: Classification logits if `n_classes > 0`,
+                  otherwise `None`.
         """
         x = g.ndata["feat"]
         num_nodes = g.num_nodes()

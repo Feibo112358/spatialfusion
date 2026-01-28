@@ -62,11 +62,32 @@ def build_ae_dataset(
     max_cells=10**6,
 ):
     """
-    Build a dataset for AE fine-tuning that applies the same preprocessing
-    whether data come from disk or from memory.
+    Build a PyTorch DataLoader for autoencoder fine-tuning.
 
-    - For base_path: loads each sample via load_and_preprocess_sample().
-    - For preloaded_data: standardizes features in-memory using safe_standardize().
+    This function supports two data sources:
+    - Disk-based loading using `base_path`
+    - In-memory loading using `preloaded_data`
+
+    In both cases, the same preprocessing steps are applied to ensure
+    consistency with the original AE training pipeline.
+
+    Args:
+        samples: List of sample identifiers.
+        base_path: Root directory containing sample data on disk.
+        preloaded_data: Optional dict mapping sample name to
+            `(feat1_df, feat2_df)` DataFrames.
+        batch_size: Number of cell pairs per batch.
+        max_cells: Maximum number of cells loaded per sample (disk mode).
+
+    Returns:
+        A tuple `(loader, d1_dim, d2_dim)` where:
+            - loader: PyTorch DataLoader over paired features.
+            - d1_dim: Feature dimension of modality 1.
+            - d2_dim: Feature dimension of modality 2.
+
+    Raises:
+        ValueError: If neither `base_path` nor `preloaded_data` is provided.
+        KeyError: If a requested sample is missing from `preloaded_data`.
     """
 
     datasets = []
@@ -123,12 +144,30 @@ def ae_from_arrays_finetune(
     device: str = "cuda:0",
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Run PairedAE on in-memory features with preprocessing that matches
-    `extract_embeddings_for_all_samples()`.
-    - Standardizes each feature matrix (safe z-score)
-    - Cleans indices to strings
-    - Aligns to adata.obs if provided
-    - Uses encoder1/encoder2 directly
+    Run a PairedAE model on in-memory feature matrices for fine-tuning.
+
+    This function mirrors the preprocessing used in disk-based embedding
+    extraction:
+    - Converts indices to strings
+    - Aligns features across modalities (and AnnData if provided)
+    - Applies safe standardization
+    - Uses encoder networks directly (no reconstruction loss)
+
+    Args:
+        model: Pretrained PairedAE model.
+        feat1: Feature matrix for modality 1 (cells × features).
+        feat2: Feature matrix for modality 2 (cells × features).
+        adata: Optional AnnData object for additional index alignment.
+        device: Torch device used for inference.
+
+    Returns:
+        A tuple `(z1_df, z2_df, z_joint_df)` where:
+            - z1_df: Latent embeddings from encoder1.
+            - z2_df: Latent embeddings from encoder2.
+            - z_joint_df: Average of z1 and z2 embeddings.
+
+    Raises:
+        ValueError: If no overlapping cell identifiers are found.
     """
 
     # --- Clean and align indices
@@ -189,7 +228,35 @@ def finetune_autoencoder(
     lambda_cross21: float = 0.25,
     lambda_align: float = 1.0,
 ) -> torch.nn.Module:
-    """Fine-tune pretrained AE."""
+    """
+    Fine-tune a pretrained paired autoencoder.
+
+    The training objective includes reconstruction losses for each modality,
+    cross-modality reconstruction losses, and a latent alignment loss.
+
+    Args:
+        loader: DataLoader yielding paired feature tensors.
+        d1_dim: Input dimension of modality 1.
+        d2_dim: Input dimension of modality 2.
+        pretrained_ae: Path to pretrained AE checkpoint.
+        save_dir: Directory to save fine-tuned model and loss history.
+        device: Torch device for training.
+        latent_dim: Latent space dimensionality.
+        enc_hidden_dims: Hidden layer sizes for encoders.
+        dec_hidden_dims: Hidden layer sizes for decoders.
+        epochs: Number of training epochs.
+        lr: Learning rate.
+        weight_decay: Weight decay coefficient.
+        grad_clip: Optional gradient clipping norm.
+        lambda_recon1: Weight for modality 1 reconstruction loss.
+        lambda_recon2: Weight for modality 2 reconstruction loss.
+        lambda_cross12: Weight for cross reconstruction (1→2).
+        lambda_cross21: Weight for cross reconstruction (2→1).
+        lambda_align: Weight for latent alignment loss.
+
+    Returns:
+        The fine-tuned PairedAE model.
+    """
     model = PairedAE(d1_dim, d2_dim, latent_dim,
                      enc_hidden_dims, dec_hidden_dims).to(device)
     state = torch.load(pretrained_ae, map_location=device)
@@ -250,11 +317,23 @@ def finetune_autoencoder(
 
 def standardize_pathways(df: pd.DataFrame, method: str = "robust_z", eps: float = 1e-6, tol: float = 1e-3) -> pd.DataFrame:
     """
-    Column-wise standardization of pathway scores.
+    Standardize pathway activation scores column-wise.
+
+    Supported methods:
     - 'robust_z': (x - median) / IQR
-    - 'z':        (x - mean) / std
-    Columns where all values are nearly zero are set to 0.
-    NaNs/infs -> 0.0, float32 output.
+    - 'z': (x - mean) / std
+
+    Columns with near-zero variation are set to zero, and all NaN or
+    infinite values are replaced with 0.
+
+    Args:
+        df: Pathway activation DataFrame.
+        method: Standardization method ('robust_z' or 'z').
+        eps: Numerical stability constant.
+        tol: Threshold for detecting near-zero columns.
+
+    Returns:
+        Standardized pathway activation DataFrame (float32).
     """
     df = df.copy()
     all_near_zero = (df.abs().max(axis=0) < tol)
@@ -276,6 +355,20 @@ def standardize_pathways(df: pd.DataFrame, method: str = "robust_z", eps: float 
 
 
 def get_coords(adata, eps=1e-6, key="spatial"):
+    """
+    Extract and standardize spatial coordinates from an AnnData object.
+
+    Args:
+        adata: AnnData containing spatial coordinates.
+        eps: Small constant to avoid division by zero.
+        key: Key in `adata.obsm` storing spatial coordinates.
+
+    Returns:
+        Standardized coordinate array.
+
+    Raises:
+        KeyError: If the specified spatial key is not present.
+    """
     if key in adata.obsm_keys():
         coords = adata.obsm[key]
     else:
@@ -297,16 +390,32 @@ def build_graphs(
     spatial_key: str = "spatial_he",
 ) -> List[dgl.DGLGraph]:
     """
-    Build graphs for each sample, with optional preloaded pathway activation labels.
+    Construct spatial graphs (and overlapping subgraphs) for GCN fine-tuning.
+
+    For each sample, this function:
+    - Loads or uses preloaded AnnData
+    - Aligns cells with joint AE embeddings
+    - Builds a kNN spatial graph
+    - Optionally attaches pathway activation labels
+    - Generates overlapping subgraphs
 
     Args:
-        samples: Sample names.
-        z_joint_df: Combined AE embedding.
-        base_path: Root directory if reading AnnData or labels from disk.
+        samples: List of sample identifiers.
+        z_joint_df: Joint AE embedding indexed by cell ID.
+        base_path: Root directory for loading AnnData and labels.
         adatas: Optional dict of preloaded AnnData objects.
-        pathway_data: Optional dict of preloaded pathway activation DataFrames.
-        use_cls_loss: Whether to include classification loss (requires labels).
-        spatial_key: Key in adata.obsm containing spatial coordinates.
+        pathway_data: Optional dict of pathway activation DataFrames.
+        knn_k: Number of neighbors for kNN graph.
+        subgraph_size: Number of nodes per subgraph.
+        stride: Stride between subgraph centers.
+        use_cls_loss: Whether classification labels are used.
+        spatial_key: Key in AnnData.obsm for spatial coordinates.
+
+    Returns:
+        List of DGL graphs ready for GCN training.
+
+    Raises:
+        RuntimeError: If no graphs are successfully built.
     """
     graphs = []
     for sample in samples:
@@ -394,7 +503,31 @@ def finetune_gcn(
     use_cls_loss: bool = True,
     use_huber: bool = True,
 ) -> torch.nn.Module:
-    """Fine-tune pretrained GCN."""
+    """
+    Fine-tune a pretrained GCN autoencoder on spatial graphs.
+
+    The loss includes feature reconstruction, latent regularization,
+    and optional pathway classification.
+
+    Args:
+        graphs: List of DGL graphs for training.
+        pretrained_gcn: Path to pretrained GCN checkpoint.
+        save_dir: Directory to save fine-tuned model and loss history.
+        device: Torch device for training.
+        hidden_dim: Hidden layer dimensionality.
+        num_layers: Number of GCN layers.
+        node_mask_ratio: Fraction of masked nodes.
+        epochs: Number of training epochs.
+        batch_size: Graph batch size.
+        lr: Learning rate.
+        lambda_reg: Weight for latent regularization loss.
+        lambda_cls: Weight for classification loss.
+        use_cls_loss: Whether to include classification loss.
+        use_huber: Whether to use Huber loss for classification.
+
+    Returns:
+        Fine-tuned GCNAutoencoder model.
+    """
     in_dim = graphs[0].ndata["feat"].shape[1]
     n_classes = graphs[0].ndata["label"].shape[1] if use_cls_loss and "label" in graphs[0].ndata else 0
 
@@ -492,8 +625,50 @@ def finetune_models(
     spatial_key: str = "spatial",
 ):
     """
-    Explicit version of the fine-tuning orchestrator for AE + GCN.
-    Works with either preloaded data or base_path on disk.
+    End-to-end fine-tuning pipeline for SpatialFusion models.
+
+    This function fine-tunes a paired autoencoder followed by a GCN,
+    using either disk-based inputs or fully preloaded data.
+
+    Args:
+        samples: List of sample identifiers.
+        base_path: Root directory for disk-based data loading.
+        pretrained_ae: Path to pretrained AE checkpoint.
+        pretrained_gcn: Path to pretrained GCN checkpoint.
+        save_dir: Output directory for fine-tuned models and logs.
+        preloaded_data: Optional in-memory feature data per sample.
+        adatas: Optional preloaded AnnData objects.
+        preloaded_pathway_data: Optional pathway activation labels.
+        latent_dim: AE latent dimensionality.
+        enc_hidden_dims: Encoder hidden layer sizes.
+        dec_hidden_dims: Decoder hidden layer sizes.
+        ae_epochs: Number of AE fine-tuning epochs.
+        ae_batch_size: AE batch size.
+        ae_lr: AE learning rate.
+        ae_weight_decay: AE weight decay.
+        ae_grad_clip: AE gradient clipping norm.
+        lambda_recon1: AE reconstruction loss weight (modality 1).
+        lambda_recon2: AE reconstruction loss weight (modality 2).
+        lambda_cross12: AE cross reconstruction loss weight (1→2).
+        lambda_cross21: AE cross reconstruction loss weight (2→1).
+        lambda_align: AE latent alignment loss weight.
+        knn_k: Number of neighbors for spatial graph construction.
+        subgraph_size: Size of spatial subgraphs.
+        stride: Stride between subgraphs.
+        gcn_hidden_dim: GCN hidden layer size.
+        gcn_num_layers: Number of GCN layers.
+        node_mask_ratio: GCN node masking ratio.
+        gcn_epochs: Number of GCN fine-tuning epochs.
+        gcn_batch_size: GCN batch size.
+        gcn_lr: GCN learning rate.
+        lambda_reg: GCN latent regularization weight.
+        lambda_cls: GCN classification loss weight.
+        use_cls_loss: Whether to use pathway classification loss.
+        use_huber: Whether to use Huber loss for classification.
+        spatial_key: Key for spatial coordinates in AnnData.
+
+    Returns:
+        A tuple `(ae_model, gcn_model)` containing the fine-tuned models.
     """
     SAVE_DIR = pl.Path(save_dir)
     SAVE_DIR.mkdir(parents=True, exist_ok=True)

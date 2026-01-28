@@ -19,9 +19,15 @@ class PairedDataset(Dataset):
     """
     PyTorch Dataset for paired samples from two modalities.
 
+    Each item returned by the dataset is a tuple `(X1, X2)` corresponding
+    to aligned samples from two feature matrices.
+
     Args:
-        df1 (pd.DataFrame): First modality data (samples x features).
-        df2 (pd.DataFrame): Second modality data (samples x features).
+        df1 (pd.DataFrame): First modality data (samples × features).
+        df2 (pd.DataFrame): Second modality data (samples × features).
+
+    Raises:
+        AssertionError: If the indices of `df1` and `df2` do not match.
     """
 
     def __init__(self, df1: pd.DataFrame, df2: pd.DataFrame):
@@ -40,14 +46,17 @@ class PairedDataset(Dataset):
 
 def build_mlp(layer_dims, activation_fn=nn.ReLU):
     """
-    Build a multi-layer perceptron (MLP) with specified layer dimensions and activation.
+    Build a multi-layer perceptron (MLP) network.
+
+    The MLP consists of linear layers with an activation function applied
+    after each hidden layer. No activation is applied to the output layer.
 
     Args:
-        layer_dims (list): List of layer sizes.
-        activation_fn (nn.Module): Activation function class.
+        layer_dims: List of layer dimensions, including input and output.
+        activation_fn: Activation function class used between layers.
 
     Returns:
-        nn.Sequential: MLP network.
+        A `torch.nn.Sequential` MLP model.
     """
     layers = []
     for i in range(len(layer_dims) - 1):
@@ -59,12 +68,15 @@ def build_mlp(layer_dims, activation_fn=nn.ReLU):
 
 class EncoderAE(nn.Module):
     """
-    Standard encoder for autoencoder models.
+    Encoder network for autoencoder models.
+
+    This encoder maps input features to a latent representation
+    using a feedforward neural network.
 
     Args:
-        input_dim (int): Input feature dimension.
-        hidden_dims (list): Hidden layer sizes.
-        latent_dim (int): Latent space dimension.
+        input_dim: Input feature dimensionality.
+        hidden_dims: List of hidden layer sizes.
+        latent_dim: Dimensionality of the latent space.
     """
 
     def __init__(self, input_dim, hidden_dims, latent_dim):
@@ -112,14 +124,20 @@ class Decoder(nn.Module):
 
 class PairedAE(nn.Module):
     """
-    Standard autoencoder for paired modalities.
+    Autoencoder model for paired modalities.
+
+    This model learns a shared latent representation for two input
+    modalities and supports:
+    - Within-modality reconstruction
+    - Cross-modality reconstruction
+    - Single-modality (UNI-only) operation
 
     Args:
-        d1_dim (int): Input dimension for modality 1.
-        d2_dim (int): Input dimension for modality 2.
-        latent_dim (int): Latent space dimension.
-        enc_hidden_dims (list, optional): Encoder hidden layer sizes.
-        dec_hidden_dims (list, optional): Decoder hidden layer sizes.
+        d1_dim: Input feature dimension for modality 1.
+        d2_dim: Input feature dimension for modality 2.
+        latent_dim: Dimensionality of the latent space.
+        enc_hidden_dims: Hidden layer sizes for the encoders.
+        dec_hidden_dims: Hidden layer sizes for the decoders.
     """
 
     def __init__(self, d1_dim, d2_dim, latent_dim, enc_hidden_dims=None, dec_hidden_dims=None):
@@ -134,13 +152,27 @@ class PairedAE(nn.Module):
 
     def forward(self, d1, d2=None):
         """
-        Forward pass for paired AE.
+        Forward pass of the paired autoencoder.
+
+        If both modalities are provided, the model computes:
+        - Latent representations for both modalities
+        - Within-modality reconstructions
+        - Cross-modality reconstructions
+
+        If only `d1` is provided, the model runs in single-modality mode.
 
         Args:
-            d1 (torch.Tensor): Modality 1 input.
-            d2 (torch.Tensor): Modality 2 input.
+            d1: Input tensor for modality 1.
+            d2: Optional input tensor for modality 2.
+
         Returns:
-            dict: Outputs including latent vectors and reconstructions.
+            Dictionary containing:
+                - "z1": Latent embedding for modality 1
+                - "z2": Latent embedding for modality 2 (or None)
+                - "recon1": Reconstruction of modality 1
+                - "recon2": Reconstruction of modality 2 (or None)
+                - "cross12": Reconstruction of modality 2 from z1 (or None)
+                - "cross21": Reconstruction of modality 1 from z2 (or None)
         """
         # Encoder for modality 1
         z1 = self.encoder1(d1)
