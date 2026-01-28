@@ -12,6 +12,10 @@ By combining molecular and morphological features, SpatialFusion captures coordi
 
 The method is described in the paper: **XXX** (citation forthcoming).
 
+You can find detailed documentation at [![Docs](https://img.shields.io/badge/docs-online-blue.svg)](
+https://<username>.github.io/spatialfusion/
+)
+
 ---
 
 ## Installation
