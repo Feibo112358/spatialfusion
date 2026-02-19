@@ -550,7 +550,9 @@ def run_full_embedding(
         sample_list: Sample identifiers for disk-based execution.
         base_path: Base directory containing sample data.
         ae_model_path: Path to AE checkpoint (if AE model not provided).
+            If omitted, the packaged pretrained AE checkpoint is used.
         gcn_model_path: Path to GCN checkpoint (if GCN model not provided).
+            If omitted, the packaged pretrained GCN checkpoint is used.
         ae_model: Optional preloaded AE model.
         gcn_model: Optional preloaded GCN model.
         latent_dim: Latent dimensionality of the AE.
