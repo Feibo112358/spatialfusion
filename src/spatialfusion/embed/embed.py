@@ -31,10 +31,14 @@ from spatialfusion.utils.embed_ae_utils import (
 )
 from spatialfusion.utils.embed_gcn_utils import extract_gcn_embeddings_with_metadata
 from spatialfusion.utils.gcn_utils import build_knn_graph
+from spatialfusion.utils.pkg_ckpt import resolve_pkg_ckpt
 
 # ---------------------------
 # Small utilities
 # ---------------------------
+
+DEFAULT_AE_CKPT_RELPATH = "spatialfusion-multimodal-ae.pt"
+DEFAULT_GCN_CKPT_RELPATH = "spatialfusion-full-gcn.pt"
 
 
 def _combine_embeddings(z1: pd.DataFrame, z2: pd.DataFrame, mode: Literal["average", "concat", "z1", "z2"]) -> pd.DataFrame:
