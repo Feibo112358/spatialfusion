@@ -566,6 +566,18 @@ def run_full_embedding(
     Returns:
         DataFrame containing final GCN embeddings with metadata.
     """
+    # Fallback to packaged pretrained AE checkpoint when no path is provided
+    # and a checkpoint is needed for loading or shape inference.
+    if ae_model_path is None and (ae_model is None or ae_inputs_by_sample is not None):
+        ae_model_path = resolve_pkg_ckpt(
+            f"checkpoint_dir_ae/{DEFAULT_AE_CKPT_RELPATH}"
+        )
+    # Fallback to packaged pretrained GCN checkpoint when no path/model is provided.
+    if gcn_model_path is None and gcn_model is None:
+        gcn_model_path = resolve_pkg_ckpt(
+            f"checkpoint_dir_gcn/{DEFAULT_GCN_CKPT_RELPATH}"
+        )
+
     # --- AE stage ---
     if ae_inputs_by_sample is not None:
         # In-memory branch
