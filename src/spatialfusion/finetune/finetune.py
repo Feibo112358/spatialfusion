@@ -638,7 +638,9 @@ def finetune_models(
         samples: List of sample identifiers.
         base_path: Root directory for disk-based data loading.
         pretrained_ae: Path to pretrained AE checkpoint.
+            If omitted, the packaged pretrained AE checkpoint is used.
         pretrained_gcn: Path to pretrained GCN checkpoint.
+            If omitted, the packaged pretrained GCN checkpoint is used.
         save_dir: Output directory for fine-tuned models and logs.
         preloaded_data: Optional in-memory feature data per sample.
         adatas: Optional preloaded AnnData objects.
