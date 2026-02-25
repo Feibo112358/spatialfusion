@@ -72,7 +72,7 @@ pip install timm
 ```bash
 pip install "torch==2.4.1" "torchvision==0.19.1" \
   --index-url https://download.pytorch.org/whl/cpu
-conda install -c dglteam -c conda-forge dgl
+pip install dgl -f https://data.dgl.ai/wheels/torch-2.4/repo.html
 
 # Optional, used for scGPT
 pip install --no-cache-dir torchtext==0.18.0 torchdata==0.9.0
