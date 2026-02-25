@@ -574,11 +574,13 @@ def run_full_embedding(
         ae_model_path = resolve_pkg_ckpt(
             f"checkpoint_dir_ae/{DEFAULT_AE_CKPT_RELPATH}"
         )
+        print(f"[run_full_embedding] Using packaged pretrained AE checkpoint: {ae_model_path}")
     # Fallback to packaged pretrained GCN checkpoint when no path/model is provided.
     if gcn_model_path is None and gcn_model is None:
         gcn_model_path = resolve_pkg_ckpt(
             f"checkpoint_dir_gcn/{DEFAULT_GCN_CKPT_RELPATH}"
         )
+        print(f"[run_full_embedding] Using packaged pretrained GCN checkpoint: {gcn_model_path}")
 
     # --- AE stage ---
     if ae_inputs_by_sample is not None:

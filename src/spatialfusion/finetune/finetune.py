@@ -680,10 +680,12 @@ def finetune_models(
         pretrained_ae = resolve_pkg_ckpt(
             f"checkpoint_dir_ae/{DEFAULT_AE_CKPT_RELPATH}"
         )
+        print(f"[finetune_models] Using packaged pretrained AE checkpoint: {pretrained_ae}")
     if not pretrained_gcn:
         pretrained_gcn = resolve_pkg_ckpt(
             f"checkpoint_dir_gcn/{DEFAULT_GCN_CKPT_RELPATH}"
         )
+        print(f"[finetune_models] Using packaged pretrained GCN checkpoint: {pretrained_gcn}")
 
     SAVE_DIR = pl.Path(save_dir)
     SAVE_DIR.mkdir(parents=True, exist_ok=True)
