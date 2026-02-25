@@ -235,17 +235,17 @@ Tutorial data is available on Zenodo:
 
 ```
 .
-├── data
-│   ├── checkpoint_dir_ae
-│   │   └── spatialfusion-multimodal-ae.pt
-│   └── checkpoint_dir_gcn
-│       ├── spatialfusion-full-gcn.pt
-│       └── spatialfusion-he-gcn.pt
 ├── LICENSE
 ├── pyproject.toml
 ├── README.md
 ├── src
 │   └── spatialfusion
+│       ├── data
+│       │   ├── checkpoint_dir_ae
+│       │   │   └── spatialfusion-multimodal-ae.pt
+│       │   └── checkpoint_dir_gcn
+│       │       ├── spatialfusion-full-gcn.pt
+│       │       └── spatialfusion-he-gcn.pt
 │       ├── embed/
 │       ├── finetune/
 │       ├── models/
@@ -261,7 +261,7 @@ Tutorial data is available on Zenodo:
 
 **Highlights:**
 
-* **data/** — pretrained AE and GCN checkpoints
+* **src/spatialfusion/data/** — packaged pretrained AE and GCN checkpoints
 * **src/spatialfusion/** — main library modules
 
   * **embed/** — embedding utilities & pipeline
