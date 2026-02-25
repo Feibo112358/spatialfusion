@@ -674,6 +674,15 @@ def finetune_models(
     Returns:
         A tuple `(ae_model, gcn_model)` containing the fine-tuned models.
     """
+    if not pretrained_ae:
+        pretrained_ae = resolve_pkg_ckpt(
+            f"checkpoint_dir_ae/{DEFAULT_AE_CKPT_RELPATH}"
+        )
+    if not pretrained_gcn:
+        pretrained_gcn = resolve_pkg_ckpt(
+            f"checkpoint_dir_gcn/{DEFAULT_GCN_CKPT_RELPATH}"
+        )
+
     SAVE_DIR = pl.Path(save_dir)
     SAVE_DIR.mkdir(parents=True, exist_ok=True)
     device = get_device()
