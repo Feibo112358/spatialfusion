@@ -9,6 +9,8 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Yates, Josephine", email = "yatesjos@broadinstitute.org" }]
+maintainers = [{ name = "Yates, Josephine", email = "yatesjos@broadinstitute.org" },
+                {name = "Camp, Sabrina", email = "scamp@broadinstitute.org"}]
 keywords = ["spatial omics", "deep learning", "bioinformatics", "multi-omics"]
 classifiers = [
   "Programming Language :: Python :: 3",
