@@ -9,6 +9,8 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Yates, Josephine", email = "yatesjos@broadinstitute.org" }]
+maintainers = [{ name = "Yates, Josephine", email = "yatesjos@broadinstitute.org" },
+                {name = "Camp, Sabrina", email = "scamp@broadinstitute.org"}]
 keywords = ["spatial omics", "deep learning", "bioinformatics", "multi-omics"]
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -41,7 +43,7 @@ dependencies = [
   "h5py>=3.8"                     
 ]
 
-dynamic = ["version"]
+version = "0.1.0"
 
 [project.optional-dependencies]
 # Choose one of these during install; do NOT include in default deps.
@@ -64,20 +66,21 @@ dev = [
 
 [tool.setuptools]
 package-dir = { "" = "src" }
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+spatialfusion = [
+  "data/**/*.pt"
+]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
 addopts = "-ra -q"
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
-
-[tool.setuptools_scm]
-version_scheme = "post-release"
-local_scheme = "node-and-date"
-fallback_version = "0.1.0"
 
 [project.urls]
 Homepage = "https://github.com/your-org/spatialfusion"

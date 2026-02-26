@@ -31,10 +31,14 @@ from spatialfusion.utils.embed_ae_utils import (
 )
 from spatialfusion.utils.embed_gcn_utils import extract_gcn_embeddings_with_metadata
 from spatialfusion.utils.gcn_utils import build_knn_graph
+from spatialfusion.utils.pkg_ckpt import resolve_pkg_ckpt
 
 # ---------------------------
 # Small utilities
 # ---------------------------
+
+DEFAULT_AE_CKPT_RELPATH = "spatialfusion-multimodal-ae.pt"
+DEFAULT_GCN_CKPT_RELPATH = "spatialfusion-full-gcn.pt"
 
 
 def _combine_embeddings(z1: pd.DataFrame, z2: pd.DataFrame, mode: Literal["average", "concat", "z1", "z2"]) -> pd.DataFrame:
@@ -546,7 +550,9 @@ def run_full_embedding(
         sample_list: Sample identifiers for disk-based execution.
         base_path: Base directory containing sample data.
         ae_model_path: Path to AE checkpoint (if AE model not provided).
+            If omitted, the packaged pretrained AE checkpoint is used.
         gcn_model_path: Path to GCN checkpoint (if GCN model not provided).
+            If omitted, the packaged pretrained GCN checkpoint is used.
         ae_model: Optional preloaded AE model.
         gcn_model: Optional preloaded GCN model.
         latent_dim: Latent dimensionality of the AE.
@@ -562,6 +568,20 @@ def run_full_embedding(
     Returns:
         DataFrame containing final GCN embeddings with metadata.
     """
+    # Fallback to packaged pretrained AE checkpoint when no path is provided
+    # and a checkpoint is needed for loading or shape inference.
+    if ae_model_path is None and (ae_model is None or ae_inputs_by_sample is not None):
+        ae_model_path = resolve_pkg_ckpt(
+            f"checkpoint_dir_ae/{DEFAULT_AE_CKPT_RELPATH}"
+        )
+        print(f"[run_full_embedding] Using packaged pretrained AE checkpoint: {ae_model_path}")
+    # Fallback to packaged pretrained GCN checkpoint when no path/model is provided.
+    if gcn_model_path is None and gcn_model is None:
+        gcn_model_path = resolve_pkg_ckpt(
+            f"checkpoint_dir_gcn/{DEFAULT_GCN_CKPT_RELPATH}"
+        )
+        print(f"[run_full_embedding] Using packaged pretrained GCN checkpoint: {gcn_model_path}")
+
     # --- AE stage ---
     if ae_inputs_by_sample is not None:
         # In-memory branch

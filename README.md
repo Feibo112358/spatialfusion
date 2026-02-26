@@ -72,7 +72,7 @@ pip install timm
 ```bash
 pip install "torch==2.4.1" "torchvision==0.19.1" \
   --index-url https://download.pytorch.org/whl/cpu
-conda install -c dglteam -c conda-forge dgl
+pip install dgl -f https://data.dgl.ai/wheels/torch-2.4/repo.html
 
 # Optional, used for scGPT
 pip install --no-cache-dir torchtext==0.18.0 torchdata==0.9.0
@@ -142,17 +142,17 @@ A minimal example showing how to embed a dataset using the pretrained AE and GCN
 ```python
 from spatialfusion.embed.embed import AEInputs, run_full_embedding
 import pandas as pd
-import pathlib as pl
+import scanpy as sc
 
 # Load external embeddings (UNI + scGPT)
 uni_df = pd.read_parquet('UNI.parquet')
 scgpt_df = pd.read_parquet('scGPT.parquet')
 
-# Paths to pretrained models
-ae_model_dir = pl.Path('../data/checkpoint_dir_ae/')
-gcn_model_dir = pl.Path('../data/checkpoint_dir_gcn/')
+# Load AnnData object
+adata = sc.read_h5ad("object.h5ad")
 
 # Mapping sample_name -> AEInputs
+sample_name = 'sample1'
 ae_inputs_by_sample = {
     sample_name: AEInputs(
         adata=adata,
@@ -164,9 +164,7 @@ ae_inputs_by_sample = {
 # Run the multimodal embedding pipeline
 emb_df = run_full_embedding(
     ae_inputs_by_sample=ae_inputs_by_sample,
-    ae_model_path=ae_model_dir / "spatialfusion-multimodal-ae.pt",
-    gcn_model_path=gcn_model_dir / "spatialfusion-full-gcn.pt",
-    device="cuda:0",
+    device="cuda:0", # if cpu, "cpu"
     combine_mode="average",
     spatial_key='spatial',
     celltype_key='major_celltype',
@@ -237,17 +235,17 @@ Tutorial data is available on Zenodo:
 
 ```
 .
-├── data
-│   ├── checkpoint_dir_ae
-│   │   └── spatialfusion-multimodal-ae.pt
-│   └── checkpoint_dir_gcn
-│       ├── spatialfusion-full-gcn.pt
-│       └── spatialfusion-he-gcn.pt
 ├── LICENSE
 ├── pyproject.toml
 ├── README.md
 ├── src
 │   └── spatialfusion
+│       ├── data
+│       │   ├── checkpoint_dir_ae
+│       │   │   └── spatialfusion-multimodal-ae.pt
+│       │   └── checkpoint_dir_gcn
+│       │       ├── spatialfusion-full-gcn.pt
+│       │       └── spatialfusion-he-gcn.pt
 │       ├── embed/
 │       ├── finetune/
 │       ├── models/
@@ -263,7 +261,7 @@ Tutorial data is available on Zenodo:
 
 **Highlights:**
 
-* **data/** — pretrained AE and GCN checkpoints
+* **src/spatialfusion/data/** — packaged pretrained AE and GCN checkpoints
 * **src/spatialfusion/** — main library modules
 
   * **embed/** — embedding utilities & pipeline
