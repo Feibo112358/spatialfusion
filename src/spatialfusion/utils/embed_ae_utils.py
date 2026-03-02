@@ -98,7 +98,7 @@ def safe_standardize(df: pd.DataFrame, fill_value: float = 0.0, min_std: float =
     return standardized.astype(np.float32)
 
 
-def extract_embeddings_for_all_samples(model, sample_list, base_path, device='cpu'):
+def extract_embeddings_for_all_samples(model, sample_list, base_path, device='cpu', batch_size=None):
     """
     Extract embeddings for all samples using a trained AE model.
     Loads UNI and scGPT embeddings, matches cell IDs, standardizes features, and computes model embeddings.
@@ -212,13 +212,46 @@ def extract_embeddings_for_all_samples(model, sample_list, base_path, device='cp
             std_feat_1 = safe_standardize(patho_feat)
             std_feat_2 = safe_standardize(transcr_feat)
 
-            X1 = torch.tensor(std_feat_1.values,
-                              dtype=torch.float32).to(device)
-            X2 = torch.tensor(std_feat_2.values,
-                              dtype=torch.float32).to(device)
+            X1_np = std_feat_1.values.astype(np.float32)
+            X2_np = std_feat_2.values.astype(np.float32)
 
-            z1 = model.encoder1(X1).cpu().numpy()
-            z2 = model.encoder2(X2).cpu().numpy()
+            n_samples = X1_np.shape[0]
+
+            # -------------------------------------------------
+            # MODE 1: Original behavior (fully backward compatible)
+            # -------------------------------------------------
+            if batch_size is None:
+                X1 = torch.from_numpy(X1_np).to(device)
+                X2 = torch.from_numpy(X2_np).to(device)
+
+                z1 = model.encoder1(X1).cpu().numpy()
+                z2 = model.encoder2(X2).cpu().numpy()
+
+            # -------------------------------------------------
+            # MODE 2: Batched inference
+            # -------------------------------------------------
+            else:
+                z1_list, z2_list = [], []
+
+                for start in range(0, n_samples, batch_size):
+                    end = min(start + batch_size, n_samples)
+
+                    X1_batch = torch.from_numpy(X1_np[start:end]).to(device)
+                    X2_batch = torch.from_numpy(X2_np[start:end]).to(device)
+
+                    z1_batch = model.encoder1(X1_batch).cpu().numpy()
+                    z2_batch = model.encoder2(X2_batch).cpu().numpy()
+
+                    z1_list.append(z1_batch)
+                    z2_list.append(z2_batch)
+
+                    del X1_batch, X2_batch
+                    if str(device).startswith("cuda"):
+                        torch.cuda.empty_cache()
+
+                z1 = np.vstack(z1_list)
+                z2 = np.vstack(z2_list)
+
             z_joint = (z1 + z2) / 2
 
             all_z1.append(pd.DataFrame(z1, index=common_ids))
