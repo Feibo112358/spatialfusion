@@ -572,7 +572,8 @@ def run_full_embedding(
     celltype_key: str = "celltypes",
     combine_mode: Literal["average", "concat", "z1", "z2"] = "average",
 
-    batch_size: Optional[int] = None,
+    ae_batch_size: Optional[int] = None,
+    gcn_batch_size: Optional[int] = None,
     k_hop: int = 2,
 
     # optional explicit input-dim inference from files for disk path mode
@@ -611,7 +612,8 @@ def run_full_embedding(
         k: Number of neighbors for spatial graph construction.
         celltype_key: Key in AnnData.obs for cell type labels.
         combine_mode: Strategy for combining modality embeddings.
-        batch_size: Optional batch size for processing.
+        ae_batch_size: Optional batch size for AE processing.
+        gcn_batch_size: Optional batch size for GCN inference.
         k_hop: Number of hops in the spatial graph for batching.
         uni_path: Optional UNI file path for dimension inference.
         scgpt_path: Optional scGPT file path for dimension inference.
@@ -662,7 +664,7 @@ def run_full_embedding(
 
         for sample, inputs in ae_inputs_by_sample.items():
             z1, z2, z_joint = ae_from_arrays(
-                ae_model, inputs, device=device, combine_mode=combine_mode, batch_size=batch_size)
+                ae_model, inputs, device=device, combine_mode=combine_mode, batch_size=ae_batch_size)
             # collect
             z1["sample"] = sample
             z2["sample"] = sample
@@ -725,7 +727,7 @@ def run_full_embedding(
         spatial_key=spatial_key,
         celltype_key=celltype_key,
         k=k,
-        batch_size=batch_size,
+        batch_size=gcn_batch_size,
         k_hop=k_hop,
     )
     return emb_df
