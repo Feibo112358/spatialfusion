@@ -206,7 +206,7 @@ def ae_from_arrays_finetune(
         batch_size = min(batch_size, 5000)
         batch_size = max(batch_size, 100)
 
-    z1_list, z2_list = []
+    z1_list, z2_list = [], []
 
     model.eval()
     with torch.no_grad():
