@@ -614,9 +614,14 @@ def run_full_embedding(
         k: Number of neighbors for spatial graph construction.
         celltype_key: Key in AnnData.obs for cell type labels.
         combine_mode: Strategy for combining modality embeddings.
-        ae_batch_size: Optional batch size for AE processing.
+        ae_batch_size: Optional batch size for AE inference.
+            If None, an effective batch size is auto-determined for AE
+            processing.
         gcn_batch_size: Optional batch size for GCN inference.
-        k_hop: Number of hops in the spatial graph for batching.
+            If None, GCN runs full-graph inference.
+            If set, GCN uses memory-efficient subgraph batching.
+        k_hop: Number of hops for subgraph expansion during batched GCN
+            inference; used only when `gcn_batch_size` is set.
         uni_path: Optional UNI file path for dimension inference.
         scgpt_path: Optional scGPT file path for dimension inference.
         save_ae_dir: Optional directory to save AE outputs.
