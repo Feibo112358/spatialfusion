@@ -365,6 +365,7 @@ def ae_from_disk_for_samples(
     base_path: Union[str, Path],
     device: str = "cuda:0",
     combine_mode: Literal["average", "concat", "z1", "z2"] = "average",
+    batch_size: Optional[int] = None,
     save_dir: Optional[Union[str, Path]] = None,
 ):
     """
@@ -381,6 +382,7 @@ def ae_from_disk_for_samples(
         device: Torch device used for inference.
         combine_mode: Strategy for combining modality embeddings.
             One of {"average", "concat", "z1", "z2"}.
+        batch_size: Optional batch size for AE inference from disk.
         save_dir: Optional directory in which to save AE outputs.
 
     Returns:
@@ -390,7 +392,7 @@ def ae_from_disk_for_samples(
             - z_joint_df: Combined latent embeddings.
     """
     z1, z2, z_joint_unused, celltypes, samples = extract_embeddings_for_all_samples(
-        model, sample_list, base_path, device
+        model, sample_list, base_path, device, batch_size=batch_size
     )
     if combine_mode in {"z1", "z2"}:
         z_joint = _combine_embeddings(z1, z2, combine_mode)
@@ -701,7 +703,13 @@ def run_full_embedding(
                 ae_model_path, d1_dim, d2_dim, latent_dim=latent_dim, device=device)
 
         z1_df, z2_df, z_joint_df = ae_from_disk_for_samples(
-            ae_model, sample_list, base_path, device=device, combine_mode=combine_mode, save_dir=save_ae_dir
+            ae_model,
+            sample_list,
+            base_path,
+            device=device,
+            combine_mode=combine_mode,
+            batch_size=ae_batch_size,
+            save_dir=save_ae_dir,
         )
 
         # read adatas for GCN stage
