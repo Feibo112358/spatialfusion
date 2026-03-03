@@ -109,6 +109,8 @@ def extract_embeddings_for_all_samples(model, sample_list, base_path, device='cp
         sample_list (list): List of sample info (str or dict).
         base_path (str or Path): Base directory for samples.
         device (str): Device for model inference.
+        batch_size (Optional[int]): Batch size for AE inference. If None, an
+            effective batch size is auto-determined per sample.
 
     Returns:
         tuple: (z1_df, z2_df, z_joint_df, celltypes, samples)
@@ -217,10 +219,19 @@ def extract_embeddings_for_all_samples(model, sample_list, base_path, device='cp
 
             n_samples = X1_np.shape[0]
 
+            # Auto-determine batch size if not provided (mirrors ae_from_arrays)
+            effective_batch_size = batch_size
+            if effective_batch_size is None:
+                est_mem_per_sample = (X1_np.shape[1] + X2_np.shape[1]) * 4 * 2
+                effective_batch_size = max(
+                    1, int(300 * 1024 * 1024 / est_mem_per_sample))
+                effective_batch_size = min(effective_batch_size, 5000)
+                effective_batch_size = max(effective_batch_size, 100)
+
             # -------------------------------------------------
-            # MODE 1: Original behavior (fully backward compatible)
+            # MODE 1: Full-sample inference
             # -------------------------------------------------
-            if batch_size is None:
+            if n_samples <= effective_batch_size:
                 X1 = torch.from_numpy(X1_np).to(device)
                 X2 = torch.from_numpy(X2_np).to(device)
 
@@ -233,8 +244,8 @@ def extract_embeddings_for_all_samples(model, sample_list, base_path, device='cp
             else:
                 z1_list, z2_list = [], []
 
-                for start in range(0, n_samples, batch_size):
-                    end = min(start + batch_size, n_samples)
+                for start in range(0, n_samples, effective_batch_size):
+                    end = min(start + effective_batch_size, n_samples)
 
                     X1_batch = torch.from_numpy(X1_np[start:end]).to(device)
                     X2_batch = torch.from_numpy(X2_np[start:end]).to(device)
