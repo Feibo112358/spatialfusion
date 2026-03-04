@@ -96,6 +96,7 @@ pip install spatialfusion
 Includes: `pytest`, `black`, `ruff`, `sphinx`, `matplotlib`, `seaborn`.
 
 ```bash
+git clone https://github.com/uhlerlab/spatialfusion.git
 cd spatialfusion/
 pip install -e .
 ```
