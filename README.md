@@ -89,15 +89,20 @@ pip install timm
 
 #### Basic installation — *Recommended for users*
 ```bash
-cd spatialfusion/
-pip install -e .
+pip install spatialfusion
 ```
 ---
-#### Developer installation - *Recommended for contributors*
+#### Install from source - *Recommended for contributors*
 Includes: `pytest`, `black`, `ruff`, `sphinx`, `matplotlib`, `seaborn`.
 
 ```bash
+git clone https://github.com/uhlerlab/spatialfusion.git
 cd spatialfusion/
+pip install -e .
+```
+
+```bash
+# Optional contributor extras
 pip install -e ".[dev,docs]"
 ```
 
